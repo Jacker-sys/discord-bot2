@@ -1,17 +1,4 @@
-const { 
-    Client, 
-    GatewayIntentBits, 
-    EmbedBuilder, 
-    SlashCommandBuilder, 
-    REST, 
-    Routes,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle
-} = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes } = require('discord.js');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1250752254584029205';
