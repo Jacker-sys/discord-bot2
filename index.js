@@ -21,7 +21,7 @@ const GUILD_ID = '1441852576646565981';
 const LOG_CHANNEL_ID = '1476557270455160892';
 
 // Staff role required to use commands
-const REQUIRED_ROLE_ID = '144185257734719'; // fix your ID if needed
+const REQUIRED_ROLE_ID = '1441852577057734719'; // fix your ID if needed
 
 // Hospital Location
 const HOSPITAL_LOCATION = '**📍 Location:** 404 Independence Parkway N, Medical Way S, Building NO. 4041, LKVC';
