@@ -16,11 +16,7 @@ const {
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1250752254584029205';
 const GUILD_ID = '1441852576646565981';
-
-const LOG_CHANNEL_ID = '1476557270455160892';
 const REQUIRED_ROLE_ID = '1441852577057734719';
-
-const HOSPITAL_LOCATION = '**📍 Location:** 404 Independence Parkway N, Medical Way S, Building NO. 4041, LKVC';
 
 const client = new Client({
     intents: [
@@ -30,109 +26,28 @@ const client = new Client({
     ]
 });
 
-// LOGGING
-function logEvent(interaction, message) {
-    const channel = client.channels.cache.get(LOG_CHANNEL_ID);
-    if (!channel) return;
-
-    const user = interaction.user;
-    const time = new Date().toLocaleString();
-
-    channel.send(
-`📝 **Log Entry**
-${message}
-
-**User:** ${user.tag}
-**Command:** /${interaction.commandName}
-**Channel:** ${interaction.channel.name}
-**Time:** ${time}`
-    );
-}
-
-// COMMANDS (FIXED DESCRIPTIONS)
+// COMMANDS
 const commands = [
-
-    new SlashCommandBuilder()
-        .setName('startup')
-        .setDescription('Open the hospital')
-        .addStringOption(option =>
-            option.setName('staff')
-                .setDescription('Staff list')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('end')
-        .setDescription('Close hospital'),
-
-    new SlashCommandBuilder()
-        .setName('lockdown')
-        .setDescription('Lockdown hospital'),
-
-    new SlashCommandBuilder()
-        .setName('code')
-        .setDescription('Hospital code')
-        .addStringOption(option =>
-            option.setName('type')
-                .setDescription('Code type')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'Code Blue', value: 'Blue' },
-                    { name: 'Code Red', value: 'Red' },
-                    { name: 'Code Black', value: 'Black' },
-                    { name: 'Code Pink', value: 'Pink' }
-                ))
-        .addStringOption(option =>
-            option.setName('room')
-                .setDescription('Room location')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('pingrole')
-        .setDescription('Ping role')
-        .addRoleOption(option =>
-            option.setName('role')
-                .setDescription('Role to ping')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('admit')
-        .setDescription('Admit patient')
-        .addStringOption(o => o.setName('patient').setDescription('Patient name').setRequired(true))
-        .addStringOption(o => o.setName('room').setDescription('Room number').setRequired(true))
-        .addStringOption(o => o.setName('staff').setDescription('Staff name').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('discharge')
-        .setDescription('Discharge patient')
-        .addStringOption(o => o.setName('patient').setDescription('Patient name').setRequired(true))
-        .addStringOption(o => o.setName('room').setDescription('Room number').setRequired(true))
-        .addStringOption(o => o.setName('staff').setDescription('Staff name').setRequired(true)),
-
     new SlashCommandBuilder()
         .setName('reception')
         .setDescription('Create reception form')
-
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
-    try {
-        console.log('Registering slash commands...');
-        await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-            { body: commands }
-        );
-        console.log('Slash commands registered!');
-    } catch (err) {
-        console.error(err);
-    }
+    await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+        { body: commands }
+    );
 })();
 
 client.on('interactionCreate', async interaction => {
 
-    // BUTTON
+    // BUTTONS
     if (interaction.isButton()) {
+
+        // UPDATE VITALS
         if (interaction.customId === 'update_vitals') {
 
             const modal = new ModalBuilder()
@@ -157,10 +72,43 @@ client.on('interactionCreate', async interaction => {
 
             return interaction.showModal(modal);
         }
+
+        // UPDATE PATIENT INFO (ALL IN ONE)
+        if (interaction.customId === 'update_patient') {
+
+            const modal = new ModalBuilder()
+                .setCustomId('patient_modal')
+                .setTitle('Update Patient Info');
+
+            const makeInput = (id, label) =>
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId(id)
+                        .setLabel(label)
+                        .setStyle(TextInputStyle.Short)
+                );
+
+            modal.addComponents(
+                makeInput('username','Patient Username (Roblox)'),
+                makeInput('room','Room Number'),
+                makeInput('admit','Admitted By & Time'),
+                makeInput('discharge','Discharged By & Time'),
+                makeInput('complaint','Chief Complaint'),
+                makeInput('age','Age'),
+                makeInput('weight','Weight'),
+                makeInput('history','Medical History')
+            );
+
+            return interaction.showModal(modal);
+        }
     }
 
-    // MODAL
+    // MODALS
     if (interaction.isModalSubmit()) {
+
+        const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+
+        // VITALS
         if (interaction.customId === 'vitals_modal') {
 
             const hr = interaction.fields.getTextInputValue('hr');
@@ -168,8 +116,6 @@ client.on('interactionCreate', async interaction => {
             const rr = interaction.fields.getTextInputValue('rr');
             const bp = interaction.fields.getTextInputValue('bp');
             const temp = interaction.fields.getTextInputValue('temp');
-
-            const embed = EmbedBuilder.from(interaction.message.embeds[0]);
 
             embed.setDescription(
 embed.data.description.replace(
@@ -185,6 +131,43 @@ TEMP - ${temp}`
 
             return interaction.update({ embeds: [embed] });
         }
+
+        // PATIENT INFO
+        if (interaction.customId === 'patient_modal') {
+
+            const username = interaction.fields.getTextInputValue('username');
+            const room = interaction.fields.getTextInputValue('room');
+            const admit = interaction.fields.getTextInputValue('admit');
+            const discharge = interaction.fields.getTextInputValue('discharge');
+            const complaint = interaction.fields.getTextInputValue('complaint');
+            const age = interaction.fields.getTextInputValue('age');
+            const weight = interaction.fields.getTextInputValue('weight');
+            const history = interaction.fields.getTextInputValue('history');
+
+            embed.setDescription(
+embed.data.description.replace(
+/ROOM NUMBER[\s\S]*------------------------------------/,
+`PATIENT USERNAME - ${username}
+
+ROOM NUMBER - ${room}
+
+ADMITTED BY & TIME - ${admit}
+
+DISCHARGED BY & TIME - ${discharge}
+
+------------------------------------
+
+CHIEF COMPLAINT - ${complaint}
+AGE - ${age}
+WEIGHT - ${weight}
+HISTORY - ${history}
+
+------------------------------------`
+)
+            );
+
+            return interaction.update({ embeds: [embed] });
+        }
     }
 
     if (!interaction.isChatInputCommand()) return;
@@ -193,13 +176,15 @@ TEMP - ${temp}`
         return interaction.reply({ content: '❌ No permission', ephemeral: true });
     }
 
-    // RECEPTION
+    // CREATE FORM
     if (interaction.commandName === 'reception') {
 
         const embed = new EmbedBuilder()
             .setTitle('📝 PATIENT FORM')
             .setDescription(
-`ROOM NUMBER -
+`PATIENT USERNAME -
+
+ROOM NUMBER -
 
 ADMITTED BY & TIME -
 
@@ -233,6 +218,11 @@ TEMP -`
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
+                .setCustomId('update_patient')
+                .setLabel('Update Patient Info')
+                .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
                 .setCustomId('update_vitals')
                 .setLabel('Update Vitals')
                 .setStyle(ButtonStyle.Primary)
@@ -240,21 +230,8 @@ TEMP -`
 
         await interaction.reply({ content: 'Form created', ephemeral: true });
         interaction.channel.send({ embeds: [embed], components: [row] });
-
-        logEvent(interaction, '📝 Reception form created');
-    }
-
-    // PINGROLE
-    if (interaction.commandName === 'pingrole') {
-        const role = interaction.options.getRole('role');
-        return interaction.reply({
-            content: `${role}`,
-            allowedMentions: { roles: [role.id] }
-        });
     }
 
 });
-
-process.on('unhandledRejection', console.error);
 
 client.login(TOKEN);
