@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes } = require('discord.js');
 
-const TOKEN = process.env.TOKEN;
+const TOKEN = process.env.TOKEN; // Read token from environment variable
 const CLIENT_ID = '1250752254584029205';
 const GUILD_ID = '1441852576646565981';
 
@@ -214,6 +214,19 @@ client.on('interactionCreate', async interaction => {
         logEvent(interaction, `🚨 Code ${type} at ${room}`);
     }
 
+    // PINGROLE
+    if (interaction.commandName === 'pingrole') {
+        const role = interaction.options.getRole('role');
+        if (!role) return interaction.reply({ content: '❌ Role not found.', ephemeral: true });
+
+        await interaction.reply({ 
+            content: `Ping: ${role}`, 
+            allowedMentions: { roles: [role.id] } 
+        });
+
+        logEvent(interaction, `📢 Pinged role: ${role.name}`);
+    }
+
     // ADMIT
     if (interaction.commandName === 'admit') {
 
@@ -252,6 +265,11 @@ client.on('interactionCreate', async interaction => {
         logEvent(interaction, `🏥 Discharged: ${patient} (Room ${room}) | Staff: ${staff}`);
     }
 
+});
+
+// Catch unhandled rejections (prevents bot from crashing)
+process.on('unhandledRejection', error => {
+    console.error('Unhandled promise rejection:', error);
 });
 
 client.login(TOKEN);
