@@ -1,16 +1,25 @@
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes } = require('discord.js');
+const { 
+    Client, 
+    GatewayIntentBits, 
+    EmbedBuilder, 
+    SlashCommandBuilder, 
+    REST, 
+    Routes,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
+} = require('discord.js');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1250752254584029205';
 const GUILD_ID = '1441852576646565981';
 
-// Logging channel
 const LOG_CHANNEL_ID = '1476557270455160892';
-
-// Staff role required to use commands
 const REQUIRED_ROLE_ID = '1441852577057734719';
 
-// Hospital Location
 const HOSPITAL_LOCATION = '**📍 Location:** 404 Independence Parkway N, Medical Way S, Building NO. 4041, LKVC';
 
 const client = new Client({
@@ -21,7 +30,7 @@ const client = new Client({
     ]
 });
 
-// Logging helper
+// Logging
 function logEvent(interaction, message) {
     const channel = client.channels.cache.get(LOG_CHANNEL_ID);
     if (!channel) return;
@@ -40,7 +49,7 @@ ${message}
     );
 }
 
-// Slash commands
+// Commands
 const commands = [
 
     new SlashCommandBuilder()
@@ -48,171 +57,187 @@ const commands = [
         .setDescription('Open the hospital')
         .addStringOption(option =>
             option.setName('staff')
-                .setDescription('Separate staff with commas')
                 .setRequired(true)),
 
-    new SlashCommandBuilder()
-        .setName('end')
-        .setDescription('Close the hospital'),
-
-    new SlashCommandBuilder()
-        .setName('lockdown')
-        .setDescription('Put the hospital in lockdown'),
+    new SlashCommandBuilder().setName('end').setDescription('Close hospital'),
+    new SlashCommandBuilder().setName('lockdown').setDescription('Lockdown'),
 
     new SlashCommandBuilder()
         .setName('code')
-        .setDescription('Announce a hospital code')
+        .setDescription('Hospital code')
         .addStringOption(option =>
             option.setName('type')
-                .setDescription('Code type')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'Code Blue (Medical Emergency)', value: 'Blue' },
-                    { name: 'Code Red (Fire)', value: 'Red' },
-                    { name: 'Code Black (Bomb Threat)', value: 'Black' },
-                    { name: 'Code Pink (Infant/Child Abduction)', value: 'Pink' },
-                    { name: 'Code Orange (Hazardous Material)', value: 'Orange' },
-                    { name: 'Code Silver (Active Threat)', value: 'Silver' },
-                    { name: 'Code Yellow (Missing Person)', value: 'Yellow' },
-                    { name: 'Code White (Violent Person)', value: 'White' }
+                    { name: 'Code Blue', value: 'Blue' },
+                    { name: 'Code Red', value: 'Red' },
+                    { name: 'Code Black', value: 'Black' },
+                    { name: 'Code Pink', value: 'Pink' }
                 ))
         .addStringOption(option =>
             option.setName('room')
-                .setDescription('Room or location')
                 .setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('pingrole')
-        .setDescription('Ping a selected role')
+        .setDescription('Ping role')
         .addRoleOption(option =>
             option.setName('role')
-                .setDescription('Role to ping')
                 .setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('admit')
-        .setDescription('Admit a patient')
-        .addStringOption(option =>
-            option.setName('patient')
-                .setDescription('Patient name')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('room')
-                .setDescription('Room number')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('staff')
-                .setDescription('Attending staff')
-                .setRequired(true)),
+        .setDescription('Admit')
+        .addStringOption(o=>o.setName('patient').setRequired(true))
+        .addStringOption(o=>o.setName('room').setRequired(true))
+        .addStringOption(o=>o.setName('staff').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('discharge')
-        .setDescription('Discharge a patient')
-        .addStringOption(option =>
-            option.setName('patient')
-                .setDescription('Patient name')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('room')
-                .setDescription('Room number')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('staff')
-                .setDescription('Discharging staff')
-                .setRequired(true)),
+        .setDescription('Discharge')
+        .addStringOption(o=>o.setName('patient').setRequired(true))
+        .addStringOption(o=>o.setName('room').setRequired(true))
+        .addStringOption(o=>o.setName('staff').setRequired(true)),
 
-    // NEW RECEPTION COMMAND
     new SlashCommandBuilder()
         .setName('reception')
-        .setDescription('Create a reception form')
+        .setDescription('Create reception form')
 
-].map(command => command.toJSON());
+].map(c => c.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
-    try {
-        console.log('Registering slash commands...');
-        await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-            { body: commands },
-        );
-        console.log('Slash commands registered!');
-    } catch (error) {
-        console.error(error);
-    }
+    await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+        { body: commands }
+    );
 })();
 
 client.on('interactionCreate', async interaction => {
+
+    // BUTTON
+    if (interaction.isButton()) {
+        if (interaction.customId === 'update_vitals') {
+
+            const modal = new ModalBuilder()
+                .setCustomId('vitals_modal')
+                .setTitle('Update Vitals');
+
+            const makeInput = (id, label) =>
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId(id)
+                        .setLabel(label)
+                        .setStyle(TextInputStyle.Short)
+                );
+
+            modal.addComponents(
+                makeInput('hr','Heart Rate'),
+                makeInput('spo2','SPO2'),
+                makeInput('rr','Resp Rate'),
+                makeInput('bp','Blood Pressure'),
+                makeInput('temp','Temperature')
+            );
+
+            return interaction.showModal(modal);
+        }
+    }
+
+    // MODAL
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'vitals_modal') {
+
+            const hr = interaction.fields.getTextInputValue('hr');
+            const spo2 = interaction.fields.getTextInputValue('spo2');
+            const rr = interaction.fields.getTextInputValue('rr');
+            const bp = interaction.fields.getTextInputValue('bp');
+            const temp = interaction.fields.getTextInputValue('temp');
+
+            const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+
+            embed.setDescription(
+embed.data.description.replace(
+/\*\*CURRENT VITALS:\*\*[\s\S]*/,
+`**CURRENT VITALS:**
+HR - ${hr}
+SPO2 - ${spo2}
+RR - ${rr}
+BP - ${bp}
+TEMP - ${temp}`
+)
+            );
+
+            return interaction.update({ embeds: [embed] });
+        }
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     if (!interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
-        return interaction.reply({
-            content: '❌ You do not have permission to use this command.',
-            ephemeral: true
-        });
+        return interaction.reply({ content: 'No permission', ephemeral: true });
     }
 
     // RECEPTION
     if (interaction.commandName === 'reception') {
 
         const embed = new EmbedBuilder()
-            .setTitle('📝 PATIENT RECEPTION FORM')
+            .setTitle('📝 PATIENT FORM')
             .setDescription(
-`**ROOM NUMBER -**
- 
-**ADMITTED BY & TIME -**
- 
-**DISCHARGED BY & TIME -**
+`ROOM NUMBER -
+
+ADMITTED BY & TIME -
+
+DISCHARGED BY & TIME -
 
 ------------------------------------
 
-**CHIEF COMPLAINT -**
-**AGE -**
-**WEIGHT (KG OR POUNDS) -**
-**COMPLAINT HISTORY/REASON -**
-**MEDICAL HISTORY & ALLERGIES -**
-
-**RECEPTIONIST PART COMPLETE**
+CHIEF COMPLAINT -
+AGE -
+WEIGHT -
+HISTORY -
 
 ------------------------------------
 
-**PHYSICAL ASSESSMENT:**
-Airway (Clear/Obstructed)-  
-Breathing (Regular Breath Sounds/Abnormal Breath Sounds)-  
-Circulation (# Seconds)-  
-
-**VITALS:**
-HR (bpm) -
-SPO2 (%) -
-RR (bpm) - 
-BP (mm/Hg) -
-TEMP (F/C) -
+NORMAL RANGES:
+HR 60-100
+SPO2 95-100
+RR 12-20
+BP ~120/80
+TEMP 36.5-37.5C
 
 ------------------------------------
 
-**TREATMENT:**
-• Interventions:
-• Meds Given:
+**CURRENT VITALS:**
+HR -
+SPO2 -
+RR -
+BP -
+TEMP -`
+            );
 
-Orders:
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('update_vitals')
+                .setLabel('Update Vitals')
+                .setStyle(ButtonStyle.Primary)
+        );
 
-------------------------------------`
-            )
-            .setColor(0xCCCCCC)
-            .setTimestamp();
-
-        await interaction.reply({ content: 'Reception form created.', ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
-
-        logEvent(interaction, '📝 Reception form created');
+        await interaction.reply({ content: 'Form created', ephemeral: true });
+        return interaction.channel.send({ embeds: [embed], components: [row] });
     }
 
-    // (rest of your commands stay the same below — startup, end, etc.)
+    // PINGROLE
+    if (interaction.commandName === 'pingrole') {
+        const role = interaction.options.getRole('role');
+        return interaction.reply({
+            content: `${role}`,
+            allowedMentions: { roles: [role.id] }
+        });
+    }
+
 });
 
-process.on('unhandledRejection', error => {
-    console.error('Unhandled promise rejection:', error);
-});
+process.on('unhandledRejection', console.error);
 
 client.login(TOKEN);
