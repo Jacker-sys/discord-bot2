@@ -47,40 +47,50 @@ client.on('interactionCreate', async interaction => {
     // BUTTONS
     if (interaction.isButton()) {
 
-        // UPDATE VITALS
+        // 🔵 Update Vitals
         if (interaction.customId === 'update_vitals') {
+
+            const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+            const desc = embed.data.description;
+
+            // extract current vitals if exist, else leave empty
+            const getField = (label) => {
+                const match = desc.match(new RegExp(`${label} - (.*)`));
+                return match ? match[1].trim() : '';
+            };
 
             const modal = new ModalBuilder()
                 .setCustomId('vitals_modal')
                 .setTitle('Update Vitals');
 
-            const makeInput = (id, label) =>
+            const makeInput = (id, label, value, placeholder) =>
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId(id)
                         .setLabel(label)
                         .setStyle(TextInputStyle.Short)
+                        .setValue(value)
+                        .setPlaceholder(placeholder)
                 );
 
             modal.addComponents(
-                makeInput('hr','Heart Rate'),
-                makeInput('spo2','SPO2'),
-                makeInput('rr','Resp Rate'),
-                makeInput('bp','Blood Pressure'),
-                makeInput('temp','Temperature')
+                makeInput('hr','Heart Rate', getField('HR'), 'Normal: 60-100 bpm'),
+                makeInput('spo2','SPO2', getField('SPO2'), 'Normal: 95-100%'),
+                makeInput('rr','Resp Rate', getField('RR'), 'Normal: 12-20 bpm'),
+                makeInput('bp','Blood Pressure', getField('BP'), 'Normal ~120/80 mmHg'),
+                makeInput('temp','Temperature', getField('TEMP'), 'Normal 36.5-37.5°C')
             );
 
             return interaction.showModal(modal);
         }
 
-        // UPDATE PATIENT INFO (ALL IN ONE)
-        if (interaction.customId === 'update_patient') {
-
+        // 🟢 Update Basic Info (max 5 inputs)
+        if (interaction.customId === 'update_basic') {
             const modal = new ModalBuilder()
-                .setCustomId('patient_modal')
-                .setTitle('Update Patient Info');
+                .setCustomId('basic_modal')
+                .setTitle('Patient Info');
 
-            const makeInput = (id, label) =>
+            const makeInput = (id,label) =>
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId(id)
@@ -93,7 +103,27 @@ client.on('interactionCreate', async interaction => {
                 makeInput('room','Room Number'),
                 makeInput('admit','Admitted By & Time'),
                 makeInput('discharge','Discharged By & Time'),
-                makeInput('complaint','Chief Complaint'),
+                makeInput('complaint','Chief Complaint')
+            );
+
+            return interaction.showModal(modal);
+        }
+
+        // 🟡 Update Medical Info (age, weight, history)
+        if (interaction.customId === 'update_medical') {
+            const modal = new ModalBuilder()
+                .setCustomId('medical_modal')
+                .setTitle('Medical Info');
+
+            const makeInput = (id,label) =>
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId(id)
+                        .setLabel(label)
+                        .setStyle(TextInputStyle.Short)
+                );
+
+            modal.addComponents(
                 makeInput('age','Age'),
                 makeInput('weight','Weight'),
                 makeInput('history','Medical History')
@@ -103,14 +133,13 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // MODALS
+    // MODAL SUBMIT HANDLER
     if (interaction.isModalSubmit()) {
-
         const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+        let desc = embed.data.description;
 
-        // VITALS
+        // 🔵 VITALS
         if (interaction.customId === 'vitals_modal') {
-
             const hr = interaction.fields.getTextInputValue('hr');
             const spo2 = interaction.fields.getTextInputValue('spo2');
             const rr = interaction.fields.getTextInputValue('rr');
@@ -118,7 +147,7 @@ client.on('interactionCreate', async interaction => {
             const temp = interaction.fields.getTextInputValue('temp');
 
             embed.setDescription(
-embed.data.description.replace(
+desc.replace(
 /\*\*CURRENT VITALS:\*\*[\s\S]*/,
 `**CURRENT VITALS:**
 HR - ${hr}
@@ -132,21 +161,17 @@ TEMP - ${temp}`
             return interaction.update({ embeds: [embed] });
         }
 
-        // PATIENT INFO
-        if (interaction.customId === 'patient_modal') {
-
+        // 🟢 BASIC INFO
+        if (interaction.customId === 'basic_modal') {
             const username = interaction.fields.getTextInputValue('username');
             const room = interaction.fields.getTextInputValue('room');
             const admit = interaction.fields.getTextInputValue('admit');
             const discharge = interaction.fields.getTextInputValue('discharge');
             const complaint = interaction.fields.getTextInputValue('complaint');
-            const age = interaction.fields.getTextInputValue('age');
-            const weight = interaction.fields.getTextInputValue('weight');
-            const history = interaction.fields.getTextInputValue('history');
 
             embed.setDescription(
-embed.data.description.replace(
-/ROOM NUMBER[\s\S]*------------------------------------/,
+desc.replace(
+/PATIENT USERNAME[\s\S]*------------------------------------/,
 `PATIENT USERNAME - ${username}
 
 ROOM NUMBER - ${room}
@@ -158,7 +183,27 @@ DISCHARGED BY & TIME - ${discharge}
 ------------------------------------
 
 CHIEF COMPLAINT - ${complaint}
-AGE - ${age}
+AGE -
+WEIGHT -
+HISTORY -
+
+------------------------------------`
+)
+            );
+
+            return interaction.update({ embeds: [embed] });
+        }
+
+        // 🟡 MEDICAL INFO
+        if (interaction.customId === 'medical_modal') {
+            const age = interaction.fields.getTextInputValue('age');
+            const weight = interaction.fields.getTextInputValue('weight');
+            const history = interaction.fields.getTextInputValue('history');
+
+            embed.setDescription(
+desc.replace(
+/AGE -[\s\S]*------------------------------------/,
+`AGE - ${age}
 WEIGHT - ${weight}
 HISTORY - ${history}
 
@@ -171,12 +216,10 @@ HISTORY - ${history}
     }
 
     if (!interaction.isChatInputCommand()) return;
-
-    if (!interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
+    if (!interaction.member.roles.cache.has(REQUIRED_ROLE_ID))
         return interaction.reply({ content: '❌ No permission', ephemeral: true });
-    }
 
-    // CREATE FORM
+    // CREATE RECEPTION FORM
     if (interaction.commandName === 'reception') {
 
         const embed = new EmbedBuilder()
@@ -199,15 +242,6 @@ HISTORY -
 
 ------------------------------------
 
-NORMAL RANGES:
-HR 60-100
-SPO2 95-100
-RR 12-20
-BP ~120/80
-TEMP 36.5-37.5C
-
-------------------------------------
-
 **CURRENT VITALS:**
 HR -
 SPO2 -
@@ -218,9 +252,14 @@ TEMP -`
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId('update_patient')
+                .setCustomId('update_basic')
                 .setLabel('Update Patient Info')
                 .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
+                .setCustomId('update_medical')
+                .setLabel('Update Medical Info')
+                .setStyle(ButtonStyle.Secondary),
 
             new ButtonBuilder()
                 .setCustomId('update_vitals')
@@ -231,7 +270,6 @@ TEMP -`
         await interaction.reply({ content: 'Form created', ephemeral: true });
         interaction.channel.send({ embeds: [embed], components: [row] });
     }
-
 });
 
 client.login(TOKEN);
