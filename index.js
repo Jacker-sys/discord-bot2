@@ -1,4 +1,17 @@
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes } = require('discord.js');
+const { 
+    Client, 
+    GatewayIntentBits, 
+    EmbedBuilder, 
+    SlashCommandBuilder, 
+    REST, 
+    Routes,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
+} = require('discord.js');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1250752254584029205';
@@ -17,7 +30,7 @@ const client = new Client({
     ]
 });
 
-// Logging
+// LOGGING
 function logEvent(interaction, message) {
     const channel = client.channels.cache.get(LOG_CHANNEL_ID);
     if (!channel) return;
@@ -36,7 +49,7 @@ ${message}
     );
 }
 
-// Commands
+// COMMANDS (FIXED DESCRIPTIONS)
 const commands = [
 
     new SlashCommandBuilder()
@@ -44,16 +57,23 @@ const commands = [
         .setDescription('Open the hospital')
         .addStringOption(option =>
             option.setName('staff')
+                .setDescription('Staff list')
                 .setRequired(true)),
 
-    new SlashCommandBuilder().setName('end').setDescription('Close hospital'),
-    new SlashCommandBuilder().setName('lockdown').setDescription('Lockdown'),
+    new SlashCommandBuilder()
+        .setName('end')
+        .setDescription('Close hospital'),
+
+    new SlashCommandBuilder()
+        .setName('lockdown')
+        .setDescription('Lockdown hospital'),
 
     new SlashCommandBuilder()
         .setName('code')
         .setDescription('Hospital code')
         .addStringOption(option =>
             option.setName('type')
+                .setDescription('Code type')
                 .setRequired(true)
                 .addChoices(
                     { name: 'Code Blue', value: 'Blue' },
@@ -63,6 +83,7 @@ const commands = [
                 ))
         .addStringOption(option =>
             option.setName('room')
+                .setDescription('Room location')
                 .setRequired(true)),
 
     new SlashCommandBuilder()
@@ -70,21 +91,22 @@ const commands = [
         .setDescription('Ping role')
         .addRoleOption(option =>
             option.setName('role')
+                .setDescription('Role to ping')
                 .setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('admit')
-        .setDescription('Admit')
-        .addStringOption(o=>o.setName('patient').setRequired(true))
-        .addStringOption(o=>o.setName('room').setRequired(true))
-        .addStringOption(o=>o.setName('staff').setRequired(true)),
+        .setDescription('Admit patient')
+        .addStringOption(o => o.setName('patient').setDescription('Patient name').setRequired(true))
+        .addStringOption(o => o.setName('room').setDescription('Room number').setRequired(true))
+        .addStringOption(o => o.setName('staff').setDescription('Staff name').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('discharge')
-        .setDescription('Discharge')
-        .addStringOption(o=>o.setName('patient').setRequired(true))
-        .addStringOption(o=>o.setName('room').setRequired(true))
-        .addStringOption(o=>o.setName('staff').setRequired(true)),
+        .setDescription('Discharge patient')
+        .addStringOption(o => o.setName('patient').setDescription('Patient name').setRequired(true))
+        .addStringOption(o => o.setName('room').setDescription('Room number').setRequired(true))
+        .addStringOption(o => o.setName('staff').setDescription('Staff name').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('reception')
@@ -95,10 +117,16 @@ const commands = [
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
-    await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: commands }
-    );
+    try {
+        console.log('Registering slash commands...');
+        await rest.put(
+            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+            { body: commands }
+        );
+        console.log('Slash commands registered!');
+    } catch (err) {
+        console.error(err);
+    }
 })();
 
 client.on('interactionCreate', async interaction => {
@@ -162,7 +190,7 @@ TEMP - ${temp}`
     if (!interaction.isChatInputCommand()) return;
 
     if (!interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
-        return interaction.reply({ content: 'No permission', ephemeral: true });
+        return interaction.reply({ content: '❌ No permission', ephemeral: true });
     }
 
     // RECEPTION
@@ -211,7 +239,9 @@ TEMP -`
         );
 
         await interaction.reply({ content: 'Form created', ephemeral: true });
-        return interaction.channel.send({ embeds: [embed], components: [row] });
+        interaction.channel.send({ embeds: [embed], components: [row] });
+
+        logEvent(interaction, '📝 Reception form created');
     }
 
     // PINGROLE
