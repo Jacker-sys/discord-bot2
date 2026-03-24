@@ -10,7 +10,8 @@ const {
     ButtonStyle,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    StringSelectMenuBuilder
 } = require('discord.js');
 
 const TOKEN = process.env.TOKEN; // Read token from environment variable
@@ -34,7 +35,7 @@ const client = new Client({
     ]
 });
 
-// Logging helper
+// Helper: log events
 function logEvent(interaction, message) {
     const channel = client.channels.cache.get(LOG_CHANNEL_ID);
     if (!channel) return;
@@ -53,9 +54,20 @@ ${message}
     );
 }
 
-// Slash commands
-const commands = [
+// Patient rooms
+const PATIENT_ROOMS = [
+    "ER 1","ER 2","ER 3",
+    "Patient Care 201","Patient Care 202","Patient Care 203","Patient Care 204","Patient Care 205","Patient Care 206",
+    "ICU Bed 301","ICU Bed 302","ICU Bed 303","ICU Bed 304","ICU Bed 305","ICU Bed 306","ICU Bed 307"
+];
 
+// Convert rooms to choices
+const ROOM_CHOICES = PATIENT_ROOMS.map(room => ({ name: room, value: room }));
+
+// ----------------------
+// SLASH COMMANDS
+// ----------------------
+const commands = [
     new SlashCommandBuilder()
         .setName('startup')
         .setDescription('Open the hospital')
@@ -92,7 +104,8 @@ const commands = [
         .addStringOption(option =>
             option.setName('room')
                 .setDescription('Room or location')
-                .setRequired(true)),
+                .setRequired(true)
+                .addChoices(...ROOM_CHOICES)),
 
     new SlashCommandBuilder()
         .setName('pingrole')
@@ -111,8 +124,9 @@ const commands = [
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('room')
-                .setDescription('Room number')
-                .setRequired(true))
+                .setDescription('Patient Room')
+                .setRequired(true)
+                .addChoices(...ROOM_CHOICES))
         .addStringOption(option =>
             option.setName('staff')
                 .setDescription('Attending staff')
@@ -127,8 +141,9 @@ const commands = [
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('room')
-                .setDescription('Room number')
-                .setRequired(true))
+                .setDescription('Patient Room')
+                .setRequired(true)
+                .addChoices(...ROOM_CHOICES))
         .addStringOption(option =>
             option.setName('staff')
                 .setDescription('Discharging staff')
@@ -146,153 +161,130 @@ const commands = [
                 .setDescription('The text you want to announce')
                 .setRequired(true)),
 
-].map(command => command.toJSON());
+].map(cmd => cmd.toJSON());
 
+// ----------------------
+// REGISTER COMMANDS
+// ----------------------
 const rest = new REST({ version: '10' }).setToken(TOKEN);
-
 (async () => {
     try {
         console.log('Registering slash commands...');
-        await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-            { body: commands },
-        );
+        await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
         console.log('Slash commands registered!');
     } catch (error) {
         console.error(error);
     }
 })();
 
+// ----------------------
+// INTERACTIONS
+// ----------------------
 client.on('interactionCreate', async interaction => {
 
-    // Permission check
+    // Permission check for staff
     if (interaction.isChatInputCommand() && !interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
-        return interaction.reply({
-            content: '❌ You do not have permission to use this command.',
-            ephemeral: true
-        });
+        return interaction.reply({ content: '❌ You do not have permission.', ephemeral: true });
     }
 
-    // ----------------
-    // CHAT INPUT COMMANDS
-    // ----------------
+    // ----------------------
+    // STARTUP / END / LOCKDOWN / CODE
+    // ----------------------
+    if (interaction.isChatInputCommand()) {
+        const cmd = interaction.commandName;
 
-    // STARTUP
-    if (interaction.isChatInputCommand() && interaction.commandName === 'startup') {
-        const staffInput = interaction.options.getString('staff');
-        const formattedStaff = staffInput.split(',').map(s => s.trim()).join('\n');
+        if (cmd === 'startup') {
+            const staff = interaction.options.getString('staff');
+            const embed = new EmbedBuilder()
+                .setTitle('🏥 THE HOSPITAL IS NOW OPEN!')
+                .setDescription(`Lakeview General Hospital is now open.\n\n${HOSPITAL_LOCATION}\n\n**Staff On Duty:**\n${staff.split(',').join('\n')}`)
+                .setColor(0x00FF00)
+                .setTimestamp();
+            await interaction.reply({ content: 'Hospital opened.', ephemeral: true });
+            await interaction.channel.send({ embeds: [embed] });
+            logEvent(interaction, `Hospital opened | Staff: ${staff}`);
+        }
 
-        const embed = new EmbedBuilder()
-            .setTitle('🏥 THE HOSPITAL IS NOW OPEN!')
-            .setDescription(`Lakeview General Hospital is now open.\n\n${HOSPITAL_LOCATION}\n\n**Staff On Duty:**\n${formattedStaff}`)
-            .setColor(0x00FF00)
-            .setTimestamp();
+        if (cmd === 'end') {
+            const embed = new EmbedBuilder()
+                .setTitle('🔴 HOSPITAL CLOSED')
+                .setDescription(`Lakeview General Hospital is now closed.\n\n${HOSPITAL_LOCATION}`)
+                .setColor(0xFF0000)
+                .setTimestamp();
+            await interaction.reply({ content: 'Hospital closed.', ephemeral: true });
+            await interaction.channel.send({ embeds: [embed] });
+            logEvent(interaction, 'Hospital closed');
+        }
 
-        await interaction.reply({ content: 'Hospital opened.', ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
+        if (cmd === 'lockdown') {
+            const embed = new EmbedBuilder()
+                .setTitle('🚨 HOSPITAL IN LOCKDOWN')
+                .setDescription(`The hospital is currently in lockdown.\n\n${HOSPITAL_LOCATION}`)
+                .setColor(0xFFA500)
+                .setTimestamp();
+            await interaction.reply({ content: 'Lockdown activated.', ephemeral: true });
+            await interaction.channel.send({ embeds: [embed] });
+            logEvent(interaction, 'Lockdown activated');
+        }
 
-        logEvent(interaction, `🏥 Hospital opened\n${formattedStaff}`);
-    }
+        if (cmd === 'code') {
+            const type = interaction.options.getString('type');
+            const room = interaction.options.getString('room');
+            const embed = new EmbedBuilder()
+                .setTitle(`🚨 CODE ${type.toUpperCase()}`)
+                .setDescription(`**Location:** ${room}\n\n${HOSPITAL_LOCATION}\n\nAll available staff respond immediately.`)
+                .setColor(0xFF0000)
+                .setTimestamp();
+            await interaction.reply({ content: `Code ${type} announced.`, ephemeral: true });
+            await interaction.channel.send({ embeds: [embed] });
+            logEvent(interaction, `Code ${type} at ${room}`);
+        }
 
-    // END
-    if (interaction.isChatInputCommand() && interaction.commandName === 'end') {
-        const embed = new EmbedBuilder()
-            .setTitle('🔴 HOSPITAL CLOSED')
-            .setDescription(`Lakeview General Hospital is now closed.\n\n${HOSPITAL_LOCATION}`)
-            .setColor(0xFF0000)
-            .setTimestamp();
+        if (cmd === 'pingrole') {
+            const role = interaction.options.getRole('role');
+            await interaction.reply({ content: `Ping: ${role}`, allowedMentions: { roles: [role.id] } });
+            logEvent(interaction, `Pinged role: ${role.name}`);
+        }
 
-        await interaction.reply({ content: 'Hospital closed.', ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
+        if (cmd === 'admit') {
+            const patient = interaction.options.getString('patient');
+            const room = interaction.options.getString('room');
+            const staff = interaction.options.getString('staff');
+            const embed = new EmbedBuilder()
+                .setTitle('✅ PATIENT ADMITTED')
+                .setDescription(`**Patient:** ${patient}\n**Room:** ${room}\n**Attending Staff:** ${staff}\n\n${HOSPITAL_LOCATION}`)
+                .setColor(0x00FF00)
+                .setTimestamp();
+            await interaction.reply({ content: `${patient} admitted.`, ephemeral: true });
+            await interaction.channel.send({ embeds: [embed] });
+            logEvent(interaction, `Admitted ${patient} in ${room} | Staff: ${staff}`);
+        }
 
-        logEvent(interaction, '🔴 Hospital closed');
-    }
+        if (cmd === 'discharge') {
+            const patient = interaction.options.getString('patient');
+            const room = interaction.options.getString('room');
+            const staff = interaction.options.getString('staff');
+            const embed = new EmbedBuilder()
+                .setTitle('🏥 PATIENT DISCHARGED')
+                .setDescription(`**Patient:** ${patient}\n**Room:** ${room}\n**Discharged By:** ${staff}\n\n${HOSPITAL_LOCATION}`)
+                .setColor(0x0099FF)
+                .setTimestamp();
+            await interaction.reply({ content: `${patient} discharged.`, ephemeral: true });
+            await interaction.channel.send({ embeds: [embed] });
+            logEvent(interaction, `Discharged ${patient} from ${room} | Staff: ${staff}`);
+        }
 
-    // LOCKDOWN
-    if (interaction.isChatInputCommand() && interaction.commandName === 'lockdown') {
-        const embed = new EmbedBuilder()
-            .setTitle('🚨 HOSPITAL IN LOCKDOWN')
-            .setDescription(`The hospital is currently in lockdown.\n\n${HOSPITAL_LOCATION}`)
-            .setColor(0xFFA500)
-            .setTimestamp();
+        if (cmd === 'announce') {
+            const msg = interaction.options.getString('message');
+            await interaction.channel.send({ content: `📢 **Announcement:**\n${msg}` });
+            await interaction.reply({ content: 'Announcement sent.', ephemeral: true });
+            logEvent(interaction, `Announcement: ${msg}`);
+        }
 
-        await interaction.reply({ content: 'Lockdown activated.', ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
-
-        logEvent(interaction, '🚨 Lockdown activated');
-    }
-
-    // CODE
-    if (interaction.isChatInputCommand() && interaction.commandName === 'code') {
-        const type = interaction.options.getString('type');
-        const room = interaction.options.getString('room');
-
-        const embed = new EmbedBuilder()
-            .setTitle(`🚨 CODE ${type.toUpperCase()}`)
-            .setDescription(`**Location:** ${room}\n\n${HOSPITAL_LOCATION}\n\nAll available staff respond immediately.`)
-            .setColor(0xFF0000)
-            .setTimestamp();
-
-        await interaction.reply({ content: `Code ${type} announced.`, ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
-
-        logEvent(interaction, `🚨 Code ${type} at ${room}`);
-    }
-
-    // PINGROLE
-    if (interaction.isChatInputCommand() && interaction.commandName === 'pingrole') {
-        const role = interaction.options.getRole('role');
-        if (!role) return interaction.reply({ content: '❌ Role not found.', ephemeral: true });
-
-        await interaction.reply({ 
-            content: `Ping: ${role}`, 
-            allowedMentions: { roles: [role.id] } 
-        });
-
-        logEvent(interaction, `📢 Pinged role: ${role.name}`);
-    }
-
-    // ADMIT
-    if (interaction.isChatInputCommand() && interaction.commandName === 'admit') {
-        const patient = interaction.options.getString('patient');
-        const room = interaction.options.getString('room');
-        const staff = interaction.options.getString('staff');
-
-        const embed = new EmbedBuilder()
-            .setTitle('✅ PATIENT ADMITTED')
-            .setDescription(`**Patient:** ${patient}\n**Room:** ${room}\n**Attending Staff:** ${staff}\n\n${HOSPITAL_LOCATION}`)
-            .setColor(0x00FF00)
-            .setTimestamp();
-
-        await interaction.reply({ content: `${patient} admitted.`, ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
-
-        logEvent(interaction, `🏥 Admitted: ${patient} (Room ${room}) | Staff: ${staff}`);
-    }
-
-    // DISCHARGE
-    if (interaction.isChatInputCommand() && interaction.commandName === 'discharge') {
-        const patient = interaction.options.getString('patient');
-        const room = interaction.options.getString('room');
-        const staff = interaction.options.getString('staff');
-
-        const embed = new EmbedBuilder()
-            .setTitle('🏥 PATIENT DISCHARGED')
-            .setDescription(`**Patient:** ${patient}\n**Room:** ${room}\n**Discharged By:** ${staff}\n\n${HOSPITAL_LOCATION}`)
-            .setColor(0x0099FF)
-            .setTimestamp();
-
-        await interaction.reply({ content: `${patient} discharged.`, ephemeral: true });
-        await interaction.channel.send({ embeds: [embed] });
-
-        logEvent(interaction, `🏥 Discharged: ${patient} (Room ${room}) | Staff: ${staff}`);
-    }
-
-    // RECEPTION FORM
-    if (interaction.isChatInputCommand() && interaction.commandName === 'reception') {
-        const embed = new EmbedBuilder()
-            .setTitle('📝 PATIENT FORM')
-            .setDescription(
+        if (cmd === 'reception') {
+            const embed = new EmbedBuilder()
+                .setTitle('📝 PATIENT FORM')
+                .setDescription(
 `PATIENT USERNAME -
 
 ROOM NUMBER -
@@ -316,54 +308,27 @@ SPO2 -
 RR -
 BP -
 TEMP -`
+                );
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('update_basic').setLabel('Update Patient Info').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('update_medical').setLabel('Update Medical Info').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('update_vitals').setLabel('Update Vitals').setStyle(ButtonStyle.Primary)
             );
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('update_basic')
-                .setLabel('Update Patient Info')
-                .setStyle(ButtonStyle.Success),
-
-            new ButtonBuilder()
-                .setCustomId('update_medical')
-                .setLabel('Update Medical Info')
-                .setStyle(ButtonStyle.Secondary),
-
-            new ButtonBuilder()
-                .setCustomId('update_vitals')
-                .setLabel('Update Vitals')
-                .setStyle(ButtonStyle.Primary)
-        );
-
-        await interaction.reply({ content: 'Form created', ephemeral: true });
-        interaction.channel.send({ embeds: [embed], components: [row] });
+            await interaction.reply({ content: 'Form created', ephemeral: true });
+            await interaction.channel.send({ embeds: [embed], components: [row] });
+        }
     }
 
-    // ANNOUNCE
-    if (interaction.isChatInputCommand() && interaction.commandName === 'announce') {
-        const messageText = interaction.options.getString('message');
-
-        await interaction.channel.send({ content: `📢 **Announcement:**\n${messageText}` });
-        await interaction.reply({ content: '✅ Announcement sent.', ephemeral: true });
-
-        logEvent(interaction, `📢 Announcement: ${messageText}`);
-    }
-
-    // --------------------------
+    // ----------------------
     // BUTTONS & MODALS HANDLING
-    // --------------------------
-    if (interaction.isButton()) {
-        // Vitals, basic, and medical modal handling (same as before) ...
-        // [Keep your existing modal code here, unchanged]
-    }
-
-    if (interaction.isModalSubmit()) {
-        // Modal submit handling (same as before)
-        // [Keep your existing modal code here, unchanged]
-    }
+    // ----------------------
+    // Keep your previous modal code for vitals/basic/medical here
+    // unchanged; no need to repeat it for brevity
 });
 
 // Catch unhandled rejections
-process.on('unhandledRejection', error => console.error('Unhandled promise rejection:', error));
+process.on('unhandledRejection', err => console.error('Unhandled promise rejection:', err));
 
 client.login(TOKEN);
